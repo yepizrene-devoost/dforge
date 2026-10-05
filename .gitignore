@@ -1,0 +1,22 @@
+# Local Pi runtime state — the skill registry is scanned per machine and its
+# paths differ per developer. Never shared, never committed. Note: this entry
+# must live at the root, because `.atl/.gitignore` cannot ignore itself and so
+# never reaches a fresh clone.
+.atl/
+
+# Local environment
+.env
+
+# Build output
+/bin/
+/dist/
+/dforge
+*.exe
+
+# OS noise
+.DS_Store
+
+# Regenerable release documents produced by Make targets. Curated into
+# CHANGELOG.md and the GitHub release body — never committed.
+CHANGELOG.draft.md
+RELEASE_NOTES.md
