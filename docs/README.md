@@ -12,3 +12,4 @@
 | Branch | Note | Issue |
 | --- | --- | --- |
 | `hotfix/governance-artifacts` | [governance-artifacts](branches/governance-artifacts.md) | [#1](https://github.com/yepizrene-devoost/dforge/issues/1) |
+| `hotfix/issue-gate-scoping` | [issue-gate-scoping](branches/issue-gate-scoping.md) | [#3](https://github.com/yepizrene-devoost/dforge/issues/3) |

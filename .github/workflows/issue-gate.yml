@@ -119,6 +119,7 @@ jobs:
 
   artifacts:
     name: Task record and branch note exist
+    if: github.event_name == 'pull_request'   # issue #3: head_ref is empty on issue events
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

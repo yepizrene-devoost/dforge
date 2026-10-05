@@ -42,3 +42,7 @@ constraints; what a branch changed lives in its branch note under `docs/branches
   (pull request only, `enforce_admins: true`). GitHub forbids self-approval, so
   raising it to 1 in a solo repository deadlocks every pull request. Revisit only
   when a second reviewer exists.
+- Standing trap for workflow authors: `github.head_ref` is **empty on issue
+  events** — it only exists on `pull_request`. Any job that derives state from it
+  must be scoped with `if: github.event_name == 'pull_request'`, or it fails on
+  every label change, edit and issue close (learned the hard way in issue #3).
