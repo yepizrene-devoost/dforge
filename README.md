@@ -192,6 +192,7 @@ Layout rationale: [0007](docs/decisions/0007-domain-separated-harness.md).
 | [decisions/0009](docs/decisions/0009-build-scope-and-sequencing.md) | Build scope, sequencing, and the kill criterion |
 | [decisions/0010](docs/decisions/0010-enforcement-surface.md) | Enforcement surface: who gets stopped, and by what |
 | [decisions/0011](docs/decisions/0011-deterministic-verification.md) | Deterministic verification versus AI judgement |
+| [decisions/0012](docs/decisions/0012-issue-linked-pull-requests.md) | Issue-linked pull requests and the issue lifecycle |
 
 ## Roadmap
 

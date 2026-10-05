@@ -1,0 +1,49 @@
+name: Decision proposal
+description: Proposes a change to a rule, boundary or policy — becomes a record in docs/decisions/
+labels: [decision]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      description: One line; it becomes the record title.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What forces this decision now. The facts, not the preference.
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision
+      description: What will be done, stated as a commitment.
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: What this costs and what it makes harder. Every decision has a cost.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: path:line references or links. A decision without evidence is an opinion.
+    validations:
+      required: true
+  - type: dropdown
+    id: relation
+    attributes:
+      label: Relation to existing records
+      options:
+        - New record
+        - Supersedes an existing record
+        - Amends an existing record
+    validations:
+      required: true

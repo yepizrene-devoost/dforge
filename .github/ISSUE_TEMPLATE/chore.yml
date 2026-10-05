@@ -1,0 +1,44 @@
+name: Chore
+description: Documentation, refactors and maintenance that change no rule and no behaviour
+labels: [chore]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: It determines the conventional commit type.
+      options:
+        - documentation
+        - refactor
+        - chore
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Why this is not a bug, a feature or a decision.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How the result will be checked.
+    validations:
+      required: true
+  - type: checkboxes
+    id: guard
+    attributes:
+      label: Guard
+      description: The boundary between a chore and a decision.
+      options:
+        - label: This adds, removes or modifies no rule, boundary or policy — if it did, I used Decision proposal instead
+    validations:
+      required: true

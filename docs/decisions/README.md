@@ -18,6 +18,7 @@ the old one is marked `superseded`.
 | [0009](0009-build-scope-and-sequencing.md) | Build scope, sequencing, and why `dforge` is not a subcommand | accepted |
 | [0010](0010-enforcement-surface.md) | Enforcement surface: who gets stopped, and by what | accepted |
 | [0011](0011-deterministic-verification.md) | Deterministic verification versus AI judgement | accepted |
+| [0012](0012-issue-linked-pull-requests.md) | Issue-linked pull requests and the issue lifecycle | accepted |
 
 ## Conventions
 

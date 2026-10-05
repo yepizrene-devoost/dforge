@@ -1,0 +1,42 @@
+name: issue-gate
+
+# Governance gate for docs/decisions/0012.
+#
+# This slice ships the artifact gate only: every task ships its task record and
+# its branch note. The issue-approval gate (every referenced issue carries
+# status:approved) is its own work unit — two review rounds produced five
+# CRITICAL findings on that job, and it deserves a focused slice.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    name: Task record and branch note exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check artifacts at the derived slug
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          slug="${BRANCH#*/}"   # hotfix/governance-artifacts → governance-artifacts
+          if [ -z "$slug" ] || [ "$slug" = "$BRANCH" ]; then
+            echo "::error::Branch '$BRANCH' carries no type prefix; the artifact slug cannot be derived."
+            exit 1
+          fi
+          fail=0
+          for f in "odd/tasks/$slug.md" "docs/branches/$slug.md"; do
+            if [ -f "$f" ]; then
+              echo "ok: $f"
+            else
+              echo "::error::Missing $f — every task ships its record and its branch note (0002, 0003)."
+              fail=1
+            fi
+          done
+          exit $fail
