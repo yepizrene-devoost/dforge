@@ -39,9 +39,10 @@ the labels and the gate, that rule is a note rather than a mechanism
 
 ## Correction
 
-The first two review rounds produced five CRITICAL findings on the gate job, so
-**the gate job ships as its own work unit** and this slice freezes without it:
-the findings are its design requirements, and its required check was removed
-from `main`'s protection until it lands. The artifact gate (task record +
-branch note) stayed: it passed every round. Detail in
-`odd/tasks/governance-artifacts.md`.
+The first two review rounds produced five CRITICAL findings on the gate job. The
+owner closed the split the same day: **the gate was rebuilt inside
+`issue-gate.yml` with those findings as design requirements**, and then **left
+unreviewed by RDD** on his explicit decision after a third round returned three
+more CRITICAL findings on the same loop. The agent self-review is recorded as a
+proposal, not a verdict; the named residual risk is an unknown silent path
+leaving a stale pass. Detail in `odd/tasks/governance-artifacts.md`.

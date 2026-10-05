@@ -25,6 +25,19 @@ Issue #1 · Branch `hotfix/governance-artifacts` (from `main`) · Type: chore
 - [x] **Native review** — the tree is frozen and submitted for review before
   commit. The verdict is expected as a native receipt recorded in Engram, never
   in this file; no approval is ever recorded here.
+- [x] **Slice 2 — issue-approval gate, rebuilt in-repo.** The owner closed the
+  split the same day: the gate returns inside `.github/workflows/issue-gate.yml`
+  with the five findings as design requirements — issue events re-evaluate open
+  PRs and post a fresh check run per head; only closing-keyword lines are
+  parsed; the count is checked before any cap so the rejection is reachable; and
+  per-PR API failures never abort the loop, so no stale pass survives.
+- [x] **Disposition — slice 2 left unreviewed by RDD.** The owner explicitly
+  cancelled the review of the rebuilt gate after three rounds of findings had
+  landed on this job. The agent self-review covered syntax, the five design
+  requirements and the three corrections, and is recorded as a proposal, not a
+  verdict. The named residual risk is an unknown silent path leaving a stale
+  pass after an approval revocation. The lineage
+  `review-5c9198e34bfc23d1` remains in `correction_required` as the record.
 
 ## Correction (R1-001, R1-002)
 
