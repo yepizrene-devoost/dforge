@@ -1,0 +1,144 @@
+name: issue-gate
+
+# Governance gates for docs/decisions/0012.
+#
+# Gate 1 (issues): every pull request opens from an issue that carries
+# status:approved. The owner approves issues; agents never do.
+#   R1-001: issue events re-evaluate every open PR that references the issue and
+#           post a fresh check run on its head, so a revoked approval re-blocks
+#           the merge instead of leaving a stale pass behind.
+#   R1-002/R3-001: only closing-keyword lines are parsed — never bare "#N" from
+#           the whole body — and the reference count is checked BEFORE any cap,
+#           so more than ten references is a reachable rejection and nothing is
+#           silently truncated.
+#   R4:     per-PR API failures never abort the loop before the remaining PRs
+#           are re-evaluated; every affected PR receives a fresh check run.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  issues:
+    types: [edited, labeled, unlabeled, closed, reopened]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  gate:
+    name: Every referenced issue is approved
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          ISSUE_NO: ${{ github.event.issue.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          evaluate() {
+            local refs count n json state fail=0
+            refs="$(printf '%s\n' "$1" \
+              | grep -iE '^[[:space:]]*(closes|fixes|resolves)(:| )' \
+              | grep -oE '#[0-9]+' | tr -d '#' | sort -un || true)"
+            if [ -z "$refs" ]; then
+              echo "::error::No issue reference found. Every PR opens from an issue that carries status:approved — add a 'Closes #N' line (see PULL_REQUEST_TEMPLATE.md)."
+              return 1
+            fi
+            count="$(printf '%s\n' "$refs" | wc -l | tr -d ' ')"
+            if [ "$count" -gt 10 ]; then
+              echo "::error::Too many issue references ($count); the gate reads at most 10 — reference the work in fewer issues."
+              return 1
+            fi
+            for n in $refs; do
+              json="$(gh api "repos/$REPO/issues/$n")" || { echo "::error::#$n not found in $REPO"; fail=1; continue; }
+              if printf '%s' "$json" | jq -e '.pull_request != null' >/dev/null; then
+                echo "::error::#$n is a pull request, not an issue."; fail=1; continue
+              fi
+              state="$(printf '%s' "$json" | jq -r '.state')"
+              if [ "$state" != "open" ]; then
+                echo "::error::#$n is $state; the gate reads open issues."; fail=1; continue
+              fi
+              if ! printf '%s' "$json" | jq -e '.labels[]?.name | select(. == "status:approved")' >/dev/null; then
+                echo "::error::#$n is not approved: the status:approved label is missing. The owner approves issues; agents never do."
+                fail=1
+              fi
+            done
+            return "$fail"
+          }
+
+          post_check() {
+            jq -n --arg sha "$2" --arg c "$3" --arg t "$4" \
+              '{name:"Every referenced issue is approved", head_sha:$sha, status:"completed", conclusion:$c, output:{title:"issue-gate", summary:$t}}' \
+              | gh api "repos/$REPO/check-runs" --input - >/dev/null
+          }
+
+          if [ "$EVENT" != "pull_request" ]; then
+            # R1-001 + R4: re-evaluate every open PR that references this issue.
+            # A per-PR failure posts a failing check run and continues, so no PR
+            # is left holding a stale pass; the job still ends failed.
+            # R1-002: --paginate so every open PR is re-evaluated, not just the
+            # first page.
+            prs="$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate --jq '.[].number')" \
+              || { echo "::error::Cannot list open pull requests; stale passes would survive unchecked."; exit 1; }
+            fail=0
+            for pr in $prs; do
+              sha="$(gh api "repos/$REPO/pulls/$pr" --jq '.head.sha' 2>/dev/null)" || sha=""
+              body_fail=""
+              body="$(gh api "repos/$REPO/pulls/$pr" --jq '.body // ""' 2>/dev/null)" || body_fail=1
+              # R4: a PR whose data cannot be read must not keep its previous
+              # passing check — it gets a failing check run instead.
+              if [ -z "$sha" ] || [ -n "$body_fail" ]; then
+                echo "::error::Could not read PR #$pr (head or body); posting a failing check so no stale pass survives."
+                if sha="$(gh api "repos/$REPO/pulls/$pr" --jq '.head.sha' 2>/dev/null)" && [ -n "$sha" ]; then
+                  post_check "$pr" "$sha" "failure" "Re-evaluation could not read PR #$pr after issue #$ISSUE_NO $ACTION" \
+                    || echo "::error::Failed to post the failing check run for PR #$pr."
+                fi
+                fail=1
+                continue
+              fi
+              case "$body" in *"#$ISSUE_NO"*) ;; *) continue ;; esac
+              if evaluate "$body"; then conclusion=success; else conclusion=failure; fail=1; fi
+              if ! post_check "$pr" "$sha" "$conclusion" "Re-evaluated after issue #$ISSUE_NO was $ACTION"; then
+                echo "::error::Failed to post the re-evaluation check run for PR #$pr."
+                fail=1
+              fi
+            done
+            exit "$fail"
+          fi
+
+          if ! evaluate "$PR_BODY"; then
+            exit 1
+          fi
+
+  artifacts:
+    name: Task record and branch note exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check artifacts at the derived slug
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          slug="${BRANCH#*/}"   # hotfix/governance-artifacts → governance-artifacts
+          if [ -z "$slug" ] || [ "$slug" = "$BRANCH" ]; then
+            echo "::error::Branch '$BRANCH' carries no type prefix; the artifact slug cannot be derived."
+            exit 1
+          fi
+          fail=0
+          for f in "odd/tasks/$slug.md" "docs/branches/$slug.md"; do
+            if [ -f "$f" ]; then
+              echo "ok: $f"
+            else
+              echo "::error::Missing $f — every task ships its record and its branch note (0002, 0003)."
+              fail=1
+            fi
+          done
+          exit $fail

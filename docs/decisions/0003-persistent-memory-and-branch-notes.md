@@ -114,9 +114,16 @@ memory:
   self_contained: true
   max_lines: 400                      # a Laravel + Inertia application under company project management has 685 → forces pruning
   format:
-    required_sections: [Repository Guidance, Workflow Decisions, Branch Notes]
+    required_sections: [Repository Guidance, Workflow Decisions, Task Notes]
     branch_heading: "### <branch-slug-without-type>"
 ```
+
+The third section is named **Task Notes**, not Branch Notes: the branch note is a
+different artifact (`docs/branches/<slug>.md`) and two artifacts must not share a
+name. In autonomous governance the ticket is the task, so the section inherits the
+`Ticket Notes` pattern under its autonomous name; its `### <branch-slug>` headings
+hold only what survives the branch, and a note that proves global is promoted to
+`Workflow Decisions` or to a record, then pruned.
 
 `committed_path` accepts an alternative digest destination.
 `docs/decisions/OD-001…015`, in the Laravel POS application, **already is** a well-structured durable

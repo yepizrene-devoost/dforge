@@ -1,0 +1,32 @@
+name: Feature request
+description: A capability that does not exist yet
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What cannot be done today, and what that costs.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should exist, stated as an observable outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else could solve it and why it is not enough.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and precedent
+      description: Link to a decision record if one applies. A claim without evidence is an opinion.
+    validations:
+      required: false
