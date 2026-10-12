@@ -1,8 +1,7 @@
-// Package cmd holds the dforge command surface. Stage 1 ships only `version`:
-// the binary skeleton with the build-time version marker wired in. The marker
-// is injected from main via -ldflags "-X main.version=..."; the commit the
-// binary was built from is read from Go's own VCS stamp (buildvcs), so no
-// revision is ever injected by hand.
+// Package cmd holds the dforge command surface: `version` and `update`. The
+// version marker is injected from main via -ldflags "-X main.version=..."; the
+// commit the binary was built from is read from Go's own VCS stamp (buildvcs),
+// so no revision is ever injected by hand.
 package cmd
 
 import (
@@ -54,6 +53,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "version":
 		return runVersion(args[1:], stdout, stderr)
+	case "update":
+		return runUpdate(args[1:], stdout, stderr)
 	case "--version":
 		_, err := fmt.Fprintln(stdout, "dforge "+version)
 		return err
@@ -136,6 +137,7 @@ Usage:
 
 Commands:
   version     Show the version marker and the commit this binary was built from
+  update      Update dforge to the latest published release
   help        Show this help
 
 Flags:

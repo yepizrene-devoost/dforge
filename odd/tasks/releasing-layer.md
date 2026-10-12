@@ -99,9 +99,24 @@ Reference maps: `dflow` and `gojira` release layers (Engram topic key
   owner approved exceeding the 600-line commit budget for this slice
   (798 lines tests-inclusive, 437 production-only; reference calibration 743)
   — single freeze, single commit.
-- [ ] **Self-update** — `dforge update`: provenance gate (refuses `dev` and
-  `snapshot-*`), download latest release for the current platform, verify
-  checksum, replace binary atomically; tests for provenance and checksum logic.
+- [x] **Self-update** — `internal/release/download.go` (stdlib-only): latest
+  release via GitHub API (`tag_name`), GoReleaser-exact asset names (title-cased
+  OS, amd64→x86_64, tar.gz/zip), archive + `checksums.txt` download, SHA-256
+  hard-fail on mismatch/missing/malformed entry, in-memory extraction of the
+  single binary. `cmd/update.go`: `dforge update` — provenance gate FIRST
+  (refuses `dev`/`snapshot-*`/empty with a clear reason, reusing
+  `internal/release.HasReleaseProvenance`), already-up-to-date exit 0, atomic
+  replacement (same-directory temp, original mode preserved, `os.Rename`),
+  old → new summary, `DFORGE_UPDATE_API_URL` override (mirrors dflow's).
+  Dispatcher wired in `cmd/version.go` by the parent (2-line case + usage line
+  + refreshed package comment). Tests: table-driven, httptest-only, no network
+  (8 test groups download-side; gate/refusal/happy-path/replace flows
+  update-side). Verified: `make check` green; live smoke — dev binary refuses
+  with the provenance reason and exit 1; help lists `update`. Known limitation
+  (advisory): a single `os.Rename` over a running binary fails on Windows —
+  dflow uses a rename-aside dance; flagged as follow-up if Windows update is
+  required. Budget at park: production 403 ✓; tests-inclusive 1121 > 600 —
+  owner exception pending at commit time.
 - [x] **Proxy warm-up** — `make warm-module-proxy`: curls
   `proxy.golang.org/github.com/yepizrene-devoost/dforge/@v/$(VERSION).info`,
   refuses `dev`, exits non-zero on curl failure for honest standalone retry;
