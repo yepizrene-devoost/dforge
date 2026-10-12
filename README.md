@@ -23,166 +23,73 @@ from the same rules, the same documentation skeleton, and the same definition of
 "done". The engineering core is stack-agnostic; everything that depends on the
 stack lives in a preset.
 
-> **Status: pre-release.** The first build target outside the design phase is
-> delivered: the release layer (version provenance, local publishing via
-> GoReleaser, checksum-verifying installers, and self-update) is implemented
-> and reviewed. Phase 1 — `dforge check` — is next. See
-> [`RELEASING.md`](RELEASING.md), [`docs/decisions/`](docs/decisions/README.md)
-> and the [build order](docs/decisions/0009-build-scope-and-sequencing.md).
+> **Status: v0.1.0 — first public release.** The releasing layer (version
+> provenance, local publishing via GoReleaser, checksum-verifying installers,
+> and self-update) is implemented, reviewed, and published. Phase 1 —
+> `dforge check` — is next.
 
-## The problem this solves
+For the problem it solves, its scope and boundaries, and the shape of what it
+generates, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The
+[decision records](docs/decisions/README.md) are canonical.
 
-An inventory of the 20 projects in the workspace found the same policies written
-by hand, five times, and drifting apart:
+## 📦 Installation
 
-| Symptom | Measured |
-| --- | --- |
-| Competing rule directories | `.agents/workflows/`, `.agents/quality/`, `.agents/rules/`, `.ai/rules/`, `.antigravity/`, plus `rules.md` and `style.md` at repo root |
-| Commit message formats in use | 3 incompatible (`type(scope): desc`, `TICKET-ID: type(scope) - desc`, `type(scope) - desc`) |
-| Branch models in use | 4 different base/merge conventions |
-| TDD strictness | "no exceptions" vs "near-strict" vs `strict_tdd: false` |
-| Branch notes | **290 files** across 6 projects, with zero tooling creating or indexing them |
-| Duplicated documentation | The Laravel Sail README is copy-pasted across projects: a Laravel API under Jira management and the team-managed Laravel application repeat the same sections at the same line numbers |
-| Memory coverage | 7 projects have a committed `MEMORY.md`; the rest have none |
+### ⚡ Option 1: One-Line Installer (Recommended)
 
-The rules are not missing. They are **unowned and unverified**, so each project
-re-derives them, and the copies drift.
+#### 🐧 Linux and macOS
 
-The drift is also **temporal, not project-specific**. The projects were built by
-hand over a long period, and harness quality tracks *when* a project was created
-rather than what it is: knowledge accumulated continuously since the organization
-adopted AI tooling, so newer projects are materially better structured than older
-ones. Left alone, that gradient is permanent — the projects that predate the
-knowledge keep the weakest rules forever, and the rules that do exist are the ones
-written when the least was known.
-
-**Project identities are withheld.** The evidence comes from private repositories,
-so each finding names a project by its role rather than its name. The identities
-are recorded privately, not here.
-
-## Scope
-
-`dforge` generates and maintains:
-
-- Agent instruction files (`AGENTS.md`, `CLAUDE.md`) with delimited, idempotent
-  sections that other tools can share.
-- The engineering core: code conventions, strict SOLID, strict ACID, strict TDD,
-  review budgets, domain separation.
-- The persistent memory contract (`.agents/MEMORY.md`) and branch notes
-  (`docs/branches/`).
-- The documentation skeleton: `docs/README.md` index, `decisions/`, `domains/`,
-  `features/`.
-- Governance profile: commit convention derived from how the project is managed.
-- Verification of all of the above, so the policy is checkable rather than
-  aspirational.
-- **Adoption of existing repositories.** A detection-driven reconciliation plan
-  that indexes rules it does not own, never clobbers a project's own rules, and
-  records dated, attributed exceptions where a core rule cannot be met yet.
-
-## Non-goals
-
-`dforge` explicitly does **not** touch:
-
-- **Branch lifecycle.** When a project declares a branch provider, that tool owns
-  branch types, bases, merge rules and the finish flow; `dforge` never declares
-  branch names. When a project declares none, `dforge` states the invariant and
-  nothing else.
-- **Stack-specific architecture.** Directory layout, framework boundaries and
-  domain code structure are preset concerns, not core concerns.
-- **Business content.** PRDs, business rules, design systems and brand identity
-  belong to each project.
-- **Infrastructure and deployment.** CI pipelines, Docker and hosting are
-  project-specific.
-- **Per-project compatibility matrices.** `dforge` stays autonomous: it holds no
-  knowledge of any specific repository, so adoption is detection-driven rather
-  than a list of known exceptions.
-- **Cleaning up a repository.** Stray scripts and loose artifacts are not
-  `dforge`'s concern. A bootstrap tool that starts deleting files nobody asked it
-  to delete is a hazard, not a convenience.
-- **Overriding a team's flow decision.** Adoption is a rollout, not an edit.
-  `dforge` may report that a project does not follow the organization's model;
-  switching that project is a conversation with its team, not an `--apply`.
-
-## Two independent axes
-
-The governing insight from the inventory: **how a project is built** and **how it
-is governed** are orthogonal. The Laravel application that keeps per-concern
-quality rule files, a Laravel application and the Laravel POS application are
-Laravel/React projects governed autonomously; a Laravel API under Jira management
-is a Laravel project governed through Jira. Stack does not predict governance.
-
-```text
-                    governance profile
-                    jira | github | autonomous
-                            │
-   preset                   │
-   laravel-modern-web ──────┼────── profile: autonomous
-   go-cli ──────────────────┼────── profile: github
-   flutter-mobile ──────────┼────── profile: jira
+```bash
+curl -fsSL https://github.com/yepizrene-devoost/dforge/releases/latest/download/install.sh | sh
 ```
 
-- **Preset** (stack) — test runner, linter, package manager, entrypoints,
-  directory layout, stack skills.
-- **Profile** (governance) — where work items live and therefore what a commit
-  must reference.
+Resolves the latest release, downloads `dforge_<OS>_<arch>.tar.gz` together
+with its published SHA-256 checksums, verifies the archive before touching
+your system, and installs the binary to `$HOME/.local/bin` without `sudo`. If
+that directory is not on your `PATH` yet, the installer prints the exact line
+to add.
 
-## Ownership boundary with `dflow`
+#### 🪟 Windows (PowerShell)
 
-| Asset | Owner | Rule |
-| --- | --- | --- |
-| `.dflow.yaml` | `dflow` | `dforge` reads it if present; never writes it |
-| `.agents/workflows/dflow.md` | `dflow` | `dforge` neither touches nor duplicates it |
-| `<!-- dflow:workflow-reference -->` block in `AGENTS.md` | `dflow` | `dforge` writes only its own delimited block |
-| Branch lifecycle (`start`/`finish`/`status`/`delete`) | `dflow` | never reimplemented |
-| Branch names and bases | `dflow` | `dforge` declares the invariant, not the names |
-| `.dforge.yaml` | `dforge` | single source of truth |
-| `.agents/harness/*` | `dforge` | derived from the schema |
-| `.agents/MEMORY.md` | `dforge` | contract, template and verification |
-| `docs/**` | `dforge` | `docs/branches/` is unclaimed by `dflow` |
-
-`AGENTS.md` is the only shared file. `dforge` reuses the marker semantics already
-implemented and tested in `dflow/pkg/agent/reference.go`: replace between HTML
-comment markers, append when there are none, and **change nothing** when a
-marker is orphaned or a legacy heading is found.
-
-## Configuration
-
-A single `.dforge.yaml` at the repository root, mirroring the `.dflow.yaml`
-precedent already present in 15 of 20 projects. It is the complete record of the
-onboarding: `dforge sync` can regenerate everything from it without asking again.
-
-Schema and rationale: [0005-configuration-schema](docs/decisions/0005-configuration-schema.md).
-
-## Generated layout
-
-```text
-AGENTS.md                    Tier 0 gate (generated, budgeted) + local rules
-.gitignore                   dforge region for machine-local paths (delimited)
-.dforge.yaml                 single source of truth
-.agents/
-  MEMORY.md                  committed memory digest (mandatory, self-contained)
-  harness/
-    index.md                 generated: moment/trigger → file
-    core/                    generated: conventions, solid, acid, tdd,
-                             review-budget, commits, branches, memory, docs, domains
-    presets/<stack>/         generated: stack depth, same frontmatter contract
-    project/                 never written by dforge; exists only if the
-                             project has rules of its own
-  workflows/dflow.md         GENERATED BY DFLOW — never touched
-  skills/
-docs/
-  README.md                  index + Branch Notes
-  branches/<slug>.md         one note per branch
-  domains/<slug>/README.md   one folder per business domain
-  decisions/                 long-lived decision records
+```powershell
+irm https://github.com/yepizrene-devoost/dforge/releases/latest/download/install.ps1 | iex
 ```
 
-Layout rationale: [0007](docs/decisions/0007-domain-separated-harness.md).
+Runs the same flow for `dforge_Windows_<arch>.zip`, verifies the SHA-256
+checksum, and installs to `%LOCALAPPDATA%\Programs\dforge`. It adds that
+directory to your user `PATH`, so open a new terminal (or sign out and back
+in) for the change to take effect.
+
+#### ⚙️ Installer options
+
+- `DFORGE_VERSION` pins a version instead of installing the latest release.
+  Both installers accept `0.1.0` and `v0.1.0`.
+- `DFORGE_INSTALL_DIR` overrides the install directory. Shell installer only;
+  defaults to `$HOME/.local/bin`.
+
+### 🛠 Option 2: Go Install
+
+```bash
+go install github.com/yepizrene-devoost/dforge@latest
+```
+
+### 📥 Option 3: Manual Download
+
+Grab the archive for your platform from the
+[Releases page](https://github.com/yepizrene-devoost/dforge/releases), verify
+it against the published `checksums.txt`, extract it, and move the binary onto
+your `PATH`.
+
+### 🔄 Keeping up to date
+
+Installed binaries update themselves with `dforge update`: it resolves the
+latest release, verifies the checksum, and replaces the binary atomically.
+Development and snapshot builds refuse to self-update.
 
 ## Documentation map
 
 | Document | Contents |
 | --- | --- |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | The problem, scope, boundaries and generated layout — the why and the how |
 | [RELEASING](RELEASING.md) | How a release is published: local `make release`; CI never publishes |
 | [decisions/0001](docs/decisions/0001-scope-and-ownership.md) | Scope, autonomy, and the `dflow` boundary |
 | [decisions/0002](docs/decisions/0002-governance-profiles.md) | Governance profiles and derived commit conventions |
@@ -210,9 +117,7 @@ place a human can read.
 **Delivered before Phase 1 — the release layer.** Version provenance (`dev` /
 `snapshot-*` / tag markers), local publishing through GoReleaser, read-only CI
 release checks, checksum-verifying installers, and `dforge update` — the
-mechanism this repository will use to ship Phase 1 itself. See
-[RELEASING](RELEASING.md); the build order of [0009](docs/decisions/0009-build-scope-and-sequencing.md)
-is unchanged.
+mechanism this repository used to ship itself. See [RELEASING](RELEASING.md).
 
 **Phase 1 — `dforge check`.** A single binary that only **verifies**: commit format
 against the derived profile, functional lines against the review budget, memory
@@ -236,12 +141,3 @@ Commit, push, pull request and release decisions are always human.
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Value: verification, not generation
-
-Generation is the cheap half of the value and the expensive half of the work. A
-template repository can seed a new project; it cannot retrofit the twenty that
-already exist, it never runs again after day one, and it cannot derive a commit
-convention from how a project is governed. Those three capabilities are why
-`dforge` exists, and none of them is generation. See
-[0009](docs/decisions/0009-build-scope-and-sequencing.md).
