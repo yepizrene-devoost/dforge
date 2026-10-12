@@ -196,7 +196,9 @@ finally {
 
 if ([Environment]::GetEnvironmentVariable('DFORGE_SKIP_PATH_UPDATE') -eq '1') {
     # Contract-test mode: print the hint instead of touching the user PATH.
-    Write-Host "==> Add $installDir to your user PATH, then open a new terminal."
+    # Write-Output, not Write-Host: stream 1 is the only stream every PowerShell
+    # engine (including 5.1) reliably captures when a test invokes this script.
+    Write-Output "==> Add $installDir to your user PATH, then open a new terminal."
 }
 else {
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
