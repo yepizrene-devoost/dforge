@@ -1,0 +1,130 @@
+# Release checks: one job, read-only, no publishing.
+#
+# Nothing else in CI exercises the release path: a broken .goreleaser.yaml or
+# a CHANGELOG.md whose newest "## 📦" section cannot yield a release body would
+# first be noticed by a human running `make release` locally. This job runs
+# that same release-path validation in CI without publishing anything — it
+# validates the GoReleaser configuration, runs the release contract tests and
+# asserts the changelog contract the release body depends on. It never runs
+# `goreleaser release`.
+#
+# Triggers cover pushes and pull requests to both long-lived branches plus a
+# manual dispatch; permissions are read-only so CI can never publish.
+
+name: Release checks
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The CI toolchain comes from go.mod itself, so it can never drift from
+      # what the module declares. dforge has no go.sum (the module has no
+      # external requirements yet), so the cache key is derived from go.mod:
+      # without cache-dependency-path, setup-go would look for go.sum, skip
+      # caching on every run and log a restore failure.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.mod
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          # Install the binary only; this workflow never runs a release.
+          install-only: true
+          # Pinned on purpose so an upstream release cannot change this job's
+          # result on its own. To bump: set `version:` below to the new stable
+          # GoReleaser tag from
+          # https://github.com/goreleaser/goreleaser/releases, then re-run. The
+          # action itself is pinned separately by its `@v7` major tag.
+          version: 'v2.18.2'
+
+      # .goreleaser.yaml is deliberately kept deprecation-free (it uses the
+      # current keys such as `archives[].formats`, `format_overrides[].formats`
+      # and `snapshot.version_template`), so this step is a real gate:
+      # `goreleaser check` exits non-zero on any deprecated or unknown key.
+      # Never add `|| true` or `continue-on-error` to this step — a broken
+      # release configuration must block here exactly as it blocks
+      # `make release` locally.
+      - name: Validate release configuration
+        run: goreleaser check
+
+      # The contract test for the Makefile's release-notes extraction and the
+      # `make release` preflight chain: fixture changelogs drive the same awk
+      # program this workflow asserts below, with faked publisher binaries, to
+      # prove that a rejected release never reaches a publisher.
+      - name: Run release contract tests
+        run: bash tests/release-contract.sh
+
+      # The published release body is built from the newest "## 📦" section of
+      # CHANGELOG.md, so assert that this section exists, that its third field
+      # is a semantic version (vMAJOR.MINOR.PATCH with the prerelease suffix
+      # `make release` accepts) and that it has non-blank content below its
+      # heading.
+      #
+      # The gate below is the awk program copied byte-for-byte from the
+      # Makefile's `release-notes` recipe. Only the make-level `$$` escapes are
+      # written as `$` here, because YAML is not make — every other byte,
+      # including the trailing backslash-newline continuations and the tabs, is
+      # identical and must stay identical: if either copy changes, change both,
+      # or CI and local publishing start diverging. The continuations are
+      # portable POSIX awk ("a backslash character immediately followed by a
+      # newline shall have no effect").
+      #
+      # CI publishes nothing, so there is no release tag to compare against:
+      # the expected version is read from the newest heading itself with the
+      # same default field splitting the Makefile uses (`awk '{print $3}'`).
+      # The gate then enforces the semver shape of that value and the
+      # non-blank body. POSIX awk only — no interval expressions (BSD awk lacks
+      # them) and no GNU-only flags.
+      #
+      # On failure the gate only exits non-zero, so the diagnosis after it
+      # picks the matching ::error annotation; the gate, not the diagnosis,
+      # decides pass or fail. Never add `|| true` or `continue-on-error` to
+      # this step either.
+      - name: Assert changelog contract
+        run: |
+          set -eu
+          heading="$(awk '$1 == "##" && $2 == "📦" { print; exit }' CHANGELOG.md)"
+          if [ -z "$heading" ]; then
+            echo '::error file=CHANGELOG.md::CHANGELOG.md has no "## 📦" version section'
+            exit 1
+          fi
+          heading_line="$(awk '$1 == "##" && $2 == "📦" { print NR; exit }' CHANGELOG.md)"
+          tag="$(printf '%s\n' "$heading" | awk '{ print $3 }')"
+          if awk -v tag="$tag" ' \
+          		BEGIN { found = 0; content = 0 } \
+          		$1 == "##" && $2 == "📦" { \
+          			if (found) exit; \
+          			if ($3 == tag && tag ~ /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$/) { found = 1; print; next } \
+          			exit 1 \
+          		} \
+          		found { print; if ($0 ~ /[^[:space:]]/) content = 1 } \
+          		END { if (!found || !content) exit 1 } \
+          	' CHANGELOG.md >/dev/null; then
+            printf 'CHANGELOG contract OK: %s\n' "$heading"
+            exit 0
+          fi
+          # The gate failed; report which invariant it broke. The regex below
+          # mirrors the Makefile's — it only selects the annotation, it never
+          # decides pass or fail (the gate above already failed).
+          if ! printf '%s\n' "$tag" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'; then
+            printf '::error file=CHANGELOG.md,line=%s::newest release section heading has no semantic version as its third field: %s\n' "$heading_line" "$heading"
+          else
+            printf '::error file=CHANGELOG.md,line=%s::newest release section has no content below its heading: %s\n' "$heading_line" "$heading"
+          fi
+          exit 1

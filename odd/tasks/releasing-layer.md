@@ -61,9 +61,18 @@ Reference maps: `dflow` and `gojira` release layers (Engram topic key
   missing `.env`/token, dev refusal, untagged and mismatched tag guards, stale
   notes, happy path asserting exact goreleaser args, proxy URL and no token
   leak). `make release-contract` green.
-- [ ] **CI release checks** — read-only workflow: `goreleaser check` with pinned
-  version, changelog-contract assertion mirroring the Makefile awk, run on
-  push/PR to `main`+`develop`.
+- [x] **CI release checks** — `.github/workflows/release-checks.yml`, read-only
+  (`contents: read`, CI never publishes): push/PR triggers on `main`+`develop`
+  plus `workflow_dispatch`; setup-go with `go.mod` (cache path adapted for the
+  go.sum-less module); GoReleaser v2.18.2 install-only via `goreleaser-action@v7`
+  (pinned); `goreleaser check` as a real gate (no `|| true`/
+  `continue-on-error`); `tests/release-contract.sh`; changelog contract running
+  the BYTE-IDENTICAL awk program spliced from the Makefile's `release-notes`
+  recipe (make-level `$$`→`$` only), with `::error file=CHANGELOG.md,line=…`
+  diagnosis. Byte-identity re-verified by the parent (empty diff); YAML parsed
+  (ruby psych); 6 fixtures exercised by the writer; contract + `make check`
+  green. PARKED on the tree for owner review per the owner's rule — native
+  review and commit follow only after the owner confirms.
 - [ ] **Installers** — `scripts/install.sh` (POSIX) and `scripts/install.ps1`
   (PowerShell): fetch latest release, verify SHA-256 against `checksums.txt`,
   install without sudo; contract tests for the install scripts.
