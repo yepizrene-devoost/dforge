@@ -126,19 +126,23 @@ Reference maps: `dflow` and `gojira` release layers (Engram topic key
   --release-notes` → warm-up. Pinned `lint` target (golangci-lint 2.11.4,
   hard-fail on mismatch). Plain `make` (not `$(MAKE)`) in the release recipe so
   `make -n` stays a dry run — dflow's documented workaround.
-- [ ] **Runbook and bookkeeping** — `RELEASING.md` adapted to this repository
-  (`release/*` from `develop` → PR into `main` → tag on `main` → `make release`;
-  tags never moved or deleted; `References #N` on release PRs),
-  `docs/branches/releasing-layer.md`, `.agents/MEMORY.md` Task Notes.
-- [ ] **README refresh** — update `README.md`: the `Status: design phase` note
-  (line ~26) must reflect that the binary skeleton and the release layer exist;
-  the `## Roadmap` section (line ~197) gains the release layer as delivered
-  work between Phase 0 and Phase 1; the documentation map lists `RELEASING.md`.
-  Prose-only changes: no rule or boundary moves, so this stays chore-level
-  within this feature.
-- [ ] **Native review** — freeze the tree for native review before commit. The
-  verdict is expected as a native receipt recorded in Engram, never in this
-  file; no approval is ever recorded here.
+- [x] **Runbook and bookkeeping** — `RELEASING.md` (runbook adapted to this
+  repository: `release/*` from `develop` via `dflow start`, changelog curation,
+  `dflow finish` → PR into `main` with `References #N`, tag on `main` as its
+  own decision, `make release` preflights, tag policy — never moved or
+  deleted, self-update notes); `docs/branches/releasing-layer.md`; Task Notes
+  in `.agents/MEMORY.md` (release-model boundary, pinned `checksums.txt` name,
+  Windows rename-aside).
+- [x] **README refresh** — status note moved from `design phase` to
+  `pre-release` (release layer delivered, Phase 1 next); `RELEASING.md` added
+  to the documentation map; roadmap gains a `Delivered before Phase 1` entry
+  for the release layer. Prose-only.
+- [x] **Native review** — completed per slice: slices 1–5 each frozen,
+  reviewed natively, and approved before their commit; slice 5 required one
+  bounded correction (R4-windows-rename-always-fails, rename-aside for
+  Windows) validated by the provider's targeted validator. Slice 6 is passive
+  documentation and skipped native review on the owner's decision. Receipts
+  are recorded in the review store, never in this file.
 
 ## Review slices
 
