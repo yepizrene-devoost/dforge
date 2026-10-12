@@ -1,0 +1,231 @@
+# install.ps1 - install the latest dforge release on Windows.
+#
+# Usage:
+#   irm https://github.com/yepizrene-devoost/dforge/releases/latest/download/install.ps1 | iex
+#   # or download it and run:
+#   .\install.ps1
+#
+# Environment variables:
+#   DFORGE_VERSION             Pin a version instead of installing the latest (e.g. 0.1.0 or v0.1.0).
+#   DFORGE_INSTALL_DIR         Install directory.
+#                              Default: %LOCALAPPDATA%\Programs\dforge
+#   DFORGE_SKIP_PATH_UPDATE    Set to 1 to print the PATH hint instead of updating
+#                              the user PATH (used by the installer contract test).
+#
+# Installs to %LOCALAPPDATA%\Programs\dforge and never requires admin rights.
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# Windows PowerShell 5.1 defaults to TLS 1.0, which GitHub no longer accepts.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+$RepositoryUrl = 'https://github.com/yepizrene-devoost/dforge'
+
+# Windows PowerShell 5.1 needs -UseBasicParsing to skip the IE engine;
+# PowerShell 6+ always uses basic parsing and does not need the switch.
+function Get-BasicParsingSwitch {
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        return @{}
+    }
+
+    return @{ UseBasicParsing = $true }
+}
+
+function Get-RemoteFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    $basicParsing = Get-BasicParsingSwitch
+    Invoke-WebRequest -Uri $Uri -OutFile $Destination -ErrorAction Stop @basicParsing
+}
+
+function Resolve-LatestTag {
+    param([Parameter(Mandatory = $true)][string]$Repository)
+
+    $latestUrl = "$Repository/releases/latest"
+    $location = $null
+    $basicParsing = Get-BasicParsingSwitch
+
+    try {
+        # Do not follow the redirect: we want the tag embedded in the Location header.
+        $response = Invoke-WebRequest -Uri $latestUrl -MaximumRedirection 0 -ErrorAction Stop @basicParsing
+        if ($null -ne $response -and $null -ne $response.Headers['Location']) {
+            $location = [string]$response.Headers['Location']
+        }
+    }
+    catch {
+        # Windows PowerShell 5.1 surfaces the redirect as a terminating error,
+        # so the Location header has to come from the exception response.
+        # Guard the response access: a non-redirect failure (for example a 404)
+        # may not expose a Location header at all.
+        try {
+            $webResponse = $_.Exception.Response
+            if ($null -ne $webResponse -and $null -ne $webResponse.Headers['Location']) {
+                $location = [string]$webResponse.Headers['Location']
+            }
+        }
+        catch {
+            # Not a redirect response; fall through to the clear error below.
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($location)) {
+        throw "Could not resolve the latest dforge release from $latestUrl. Set `$env:DFORGE_VERSION to install a specific version."
+    }
+
+    $tag = ($location.TrimEnd('/') -split '/')[-1]
+    if ([string]::IsNullOrWhiteSpace($tag)) {
+        throw "Could not read a release tag from '$location'."
+    }
+
+    return $tag
+}
+
+# --- Platform detection -------------------------------------------------------
+
+switch ($env:PROCESSOR_ARCHITECTURE) {
+    'AMD64' { $arch = 'x86_64' }
+    'ARM64' { $arch = 'arm64' }
+    default {
+        throw "Unsupported processor architecture '$env:PROCESSOR_ARCHITECTURE'. dforge ships Windows builds for x86_64 (AMD64) and arm64 only."
+    }
+}
+
+$installDir = $env:DFORGE_INSTALL_DIR
+if ([string]::IsNullOrWhiteSpace($installDir)) {
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        throw 'LOCALAPPDATA is not set, so the install location cannot be determined. Set DFORGE_INSTALL_DIR to pick an install directory.'
+    }
+    $installDir = Join-Path $env:LOCALAPPDATA 'Programs\dforge'
+}
+
+# --- Version resolution -------------------------------------------------------
+
+$pinnedVersion = $env:DFORGE_VERSION
+if (-not [string]::IsNullOrWhiteSpace($pinnedVersion)) {
+    # The checksum asset uses the plain name and the download URLs the v-prefixed tag.
+    $version = $pinnedVersion.Trim() -replace '^[vV]', ''
+    $tag = "v$version"
+    Write-Host "==> Installing dforge $version (pinned)."
+}
+else {
+    Write-Host '==> Resolving the latest dforge release...'
+    $tag = Resolve-LatestTag -Repository $RepositoryUrl
+    $version = $tag -replace '^[vV]', ''
+    Write-Host "==> Latest release is $tag."
+}
+
+$assetName = "dforge_Windows_$arch.zip"
+$assetUrl = "$RepositoryUrl/releases/download/$tag/$assetName"
+# The published manifest name: .goreleaser.yaml sets
+# `checksum: name_template: checksums.txt`.
+$checksumName = 'checksums.txt'
+$checksumUrl = "$RepositoryUrl/releases/download/$tag/$checksumName"
+
+# --- Download, verify, extract ------------------------------------------------
+
+$progressWas = $ProgressPreference
+$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("dforge-install-" + [Guid]::NewGuid().ToString('N'))
+
+try {
+    $ProgressPreference = 'SilentlyContinue'
+
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    $archivePath = Join-Path $tempDir $assetName
+    $checksumPath = Join-Path $tempDir $checksumName
+
+    Write-Host "==> Downloading $assetName..."
+    Get-RemoteFile -Uri $assetUrl -Destination $archivePath
+
+    Write-Host '==> Downloading checksums...'
+    Get-RemoteFile -Uri $checksumUrl -Destination $checksumPath
+
+    $expectedHash = $null
+    foreach ($line in (Get-Content -LiteralPath $checksumPath)) {
+        $parts = $line -split '\s+', 2
+        if ($parts.Count -eq 2) {
+            $name = $parts[1].Trim().TrimStart('*')
+            if ($name -eq $assetName) {
+                $expectedHash = $parts[0].Trim().ToLowerInvariant()
+                break
+            }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($expectedHash)) {
+        throw "No checksum entry for $assetName was found in the checksums file."
+    }
+
+    $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualHash -ne $expectedHash) {
+        throw "Checksum mismatch for ${assetName}: expected $expectedHash but got $actualHash. Aborting without extracting."
+    }
+    Write-Host '==> Checksum verified.'
+
+    $extractDir = Join-Path $tempDir 'extract'
+    Expand-Archive -LiteralPath $archivePath -DestinationPath $extractDir -Force
+
+    $extractedBinary = Join-Path $extractDir 'dforge.exe'
+    if (-not (Test-Path -LiteralPath $extractedBinary)) {
+        throw "The archive did not contain dforge.exe."
+    }
+
+    if (-not (Test-Path -LiteralPath $installDir)) {
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+    }
+
+    $targetBinary = Join-Path $installDir 'dforge.exe'
+    # Stage the new copy next to the target, then move it over the old one, so
+    # a failed write can never destroy the existing binary; a locked or running
+    # binary is surfaced as a clean failure by the move itself.
+    Copy-Item -LiteralPath $extractedBinary -Destination "$targetBinary.new" -Force
+    Move-Item -LiteralPath "$targetBinary.new" -Destination $targetBinary -Force
+    Write-Host "==> Installed dforge $version to $targetBinary"
+}
+finally {
+    $ProgressPreference = $progressWas
+    if (Test-Path -LiteralPath $tempDir) {
+        Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# --- PATH ---------------------------------------------------------------------
+
+if ([Environment]::GetEnvironmentVariable('DFORGE_SKIP_PATH_UPDATE') -eq '1') {
+    # Contract-test mode: print the hint instead of touching the user PATH.
+    # Write-Output, not Write-Host: stream 1 is the only stream every PowerShell
+    # engine (including 5.1) reliably captures when a test invokes this script.
+    Write-Output "==> Add $installDir to your user PATH, then open a new terminal."
+}
+else {
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($null -eq $userPath) {
+        $userPath = ''
+    }
+
+    $pathEntries = @($userPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    $alreadyOnPath = $false
+    foreach ($entry in $pathEntries) {
+        if ($entry.TrimEnd('\') -ieq $installDir.TrimEnd('\')) {
+            $alreadyOnPath = $true
+            break
+        }
+    }
+
+    if ($alreadyOnPath) {
+        Write-Host "==> $installDir is already on your user PATH."
+    }
+    else {
+        $newPath = if ([string]::IsNullOrWhiteSpace($userPath)) { $installDir } else { "$userPath;$installDir" }
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+        Write-Host "==> Added $installDir to your user PATH."
+        Write-Host '    Open a new terminal (or sign out and back in) for the change to take effect.'
+    }
+}
+
+Write-Host ''
+Write-Host "dforge $version is installed. Run 'dforge --help' to get started."

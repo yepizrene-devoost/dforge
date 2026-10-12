@@ -23,10 +23,12 @@ from the same rules, the same documentation skeleton, and the same definition of
 "done". The engineering core is stack-agnostic; everything that depends on the
 stack lives in a preset.
 
-> **Status: design phase.** This repository holds decisions and specifications,
-> not implementation. No `dforge` binary exists yet. See
-> [`docs/decisions/`](docs/decisions/README.md) and the
-> [build order](docs/decisions/0009-build-scope-and-sequencing.md).
+> **Status: pre-release.** The first build target outside the design phase is
+> delivered: the release layer (version provenance, local publishing via
+> GoReleaser, checksum-verifying installers, and self-update) is implemented
+> and reviewed. Phase 1 — `dforge check` — is next. See
+> [`RELEASING.md`](RELEASING.md), [`docs/decisions/`](docs/decisions/README.md)
+> and the [build order](docs/decisions/0009-build-scope-and-sequencing.md).
 
 ## The problem this solves
 
@@ -181,6 +183,7 @@ Layout rationale: [0007](docs/decisions/0007-domain-separated-harness.md).
 
 | Document | Contents |
 | --- | --- |
+| [RELEASING](RELEASING.md) | How a release is published: local `make release`; CI never publishes |
 | [decisions/0001](docs/decisions/0001-scope-and-ownership.md) | Scope, autonomy, and the `dflow` boundary |
 | [decisions/0002](docs/decisions/0002-governance-profiles.md) | Governance profiles and derived commit conventions |
 | [decisions/0003](docs/decisions/0003-persistent-memory-and-branch-notes.md) | Memory contract and branch notes |
@@ -203,6 +206,13 @@ Sequencing and the kill criterion that governs it:
 the core harness and a short `AGENTS.md`. Solves "a new project starts from zero"
 with zero code and zero maintenance, and authors the reference content once, in a
 place a human can read.
+
+**Delivered before Phase 1 — the release layer.** Version provenance (`dev` /
+`snapshot-*` / tag markers), local publishing through GoReleaser, read-only CI
+release checks, checksum-verifying installers, and `dforge update` — the
+mechanism this repository will use to ship Phase 1 itself. See
+[RELEASING](RELEASING.md); the build order of [0009](docs/decisions/0009-build-scope-and-sequencing.md)
+is unchanged.
 
 **Phase 1 — `dforge check`.** A single binary that only **verifies**: commit format
 against the derived profile, functional lines against the review budget, memory

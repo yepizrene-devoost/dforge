@@ -1,0 +1,183 @@
+# releasing-layer
+
+Release layer: local publishing, installers, self-update and CI release checks.
+Issue #5 · Branch `feature/releasing-layer` (from `develop` via `dflow start`) · Type: feature
+
+Owner-approved decisions (issue #5): local `make release` publishing (CI never
+publishes), read-only CI release checks, checksums-only integrity, GitHub
+releases + installers + `go install` with module-proxy warm-up, full
+`dforge update` in v1, runbook adapted to this repository's flow.
+
+Reference maps: `dflow` and `gojira` release layers (Engram topic key
+`dforge/release-layer/reference-maps`).
+
+## Stages
+
+- [x] **Go foundation** — `go.mod` (module `github.com/yepizrene-devoost/dforge`, go
+  1.26.1, stdlib-only), `main.go` with `var version = "dev"` ldflags target wired
+  through `cmd.SetVersion`/`cmd.Execute`, `cmd/version.go` (`dforge version [--json]`
+  with buildvcs stamp), 6 deterministic unit tests, Makefile (`build`, `build-all`,
+  `test`, `vet`, `check`, `tidy`, `install`, `clean`), gojira-identical
+  `.golangci.yml`, rooted `.gitignore` entries. Verified: `go build`, `go vet`,
+  `go test`, `make build`, `make build-all` (6 binaries), `make check`, JSON shape.
+  Deviations: stdlib `flag` dispatcher instead of cobra (zero-external-deps
+  constraint); `go.sum` absent (no external deps — Go writes no empty go.sum).
+- [x] **Version provenance** — `internal/release/provenance.go` (package
+  `release`, stdlib-only): `DevMarker`/`SnapshotPrefix` constants,
+  `ClassifyMarker`/`MarkerKind` (`MarkerRelease`, `MarkerNone`, `MarkerDev`,
+  `MarkerSnapshot`), `HasReleaseProvenance` mirroring dflow's semantics (trim,
+  exact `dev`, `snapshot-` prefix). 19 table-driven subtests, test-first (RED
+  observed: undefined symbols; GREEN: all pass). Documented decisions: `0.1.0`
+  has provenance (predicate classifies markers, not tag shape — tag-shape
+  validation belongs to release checks); `DEV` is `MarkerRelease` (exact,
+  case-sensitive match; the build only emits lowercase `dev`). Verified: `go
+  build`, `go vet`, `go test ./...`, stage-1 tests uncached, `make check`.
+  Accepted deviations: `snapshot-` requires the dash (dflow matches broader
+  `snapshot`); bare `snapshot` would classify as release — our GoReleaser
+  snapshot template is `snapshot-<short>`, so this is safe.
+- [x] **GoReleaser config** — `.goreleaser.yaml` (format v2, deprecation-free):
+  single CGO-off build linux/darwin/windows × amd64/arm64 with
+  `IsSnapshot`/`Tag` ldflags, tar.gz archives (zip on windows), dflow-style
+  `title .Os` name template (`dforge_Linux_x86_64.tar.gz`), LICENSE/README/
+  CHANGELOG bundled, `checksums.txt`, `release.mode: replace`, no changelog
+  block (commented rationale), snapshot `snapshot-{{ .ShortCommit }}`,
+  installers as `release.extra_files` (later slice; non-matching globs ignored).
+  LICENSE exists in the root, so it is bundled. `goreleaser check` validated,
+  no deprecation warnings.
+- [x] **Changelog** — `cliff.toml` (conventional commits,
+  `filter_unconventional`, `protect_breaking_commits`, `tag_pattern
+  "v[0-9].*"`, feat/fix/perf grouped, `docs(odd)` and `docs` skipped,
+  refactor/test/chore → Internal, catch-all last, heading-free output);
+  `make changelog` draft target; `CHANGELOG.md` seed with
+  generated-and-curated header and `## 📦 v0.1.0 – First public release`
+  section so the CI changelog contract is green from day one. git-cliff smoke
+  test produced grouped draft without title/date/version.
+- [x] **Release-notes extractor** — `make release-notes`: one self-contained
+  awk block extracting the newest `## 📦` section, exact `$(VERSION)` semver
+  match (prerelease accepted), non-blank body, temp file with cleanup on
+  failure. `tests/release-contract.sh` (5 extraction cases + release preflight
+  cases with fake goreleaser/curl and a git fixture: byte-exact extraction,
+  prerelease acceptance, mismatch/malformed/empty/missing-section rejections,
+  missing `.env`/token, dev refusal, untagged and mismatched tag guards, stale
+  notes, happy path asserting exact goreleaser args, proxy URL and no token
+  leak). `make release-contract` green.
+- [x] **CI release checks** — `.github/workflows/release-checks.yml`, read-only
+  (`contents: read`, CI never publishes): push/PR triggers on `main`+`develop`
+  plus `workflow_dispatch`; setup-go with `go.mod` (cache path adapted for the
+  go.sum-less module); GoReleaser v2.18.2 install-only via `goreleaser-action@v7`
+  (pinned); `goreleaser check` as a real gate (no `|| true`/
+  `continue-on-error`); `tests/release-contract.sh`; changelog contract running
+  the BYTE-IDENTICAL awk program spliced from the Makefile's `release-notes`
+  recipe (make-level `$$`→`$` only), with `::error file=CHANGELOG.md,line=…`
+  diagnosis. Byte-identity re-verified by the parent (empty diff); YAML parsed
+  (ruby psych); 6 fixtures exercised by the writer; contract + `make check`
+  green. PARKED on the tree for owner review per the owner's rule — native
+  review and commit follow only after the owner confirms.
+- [x] **Installers** — `scripts/install.sh` (POSIX, 269 functional lines):
+  latest-release redirect or `DFORGE_VERSION` pin, GoReleaser-exact asset name
+  (title-cased OS, x86_64/arm64), downloads archive + `checksums.txt`, SHA-256
+  via sha256sum/shasum with hard abort before extraction, atomic staged install
+  to `DFORGE_INSTALL_DIR` or `~/.local/bin` (no sudo), PATH hint.
+  `scripts/install.ps1` (PS 5.1 + pwsh, 156): same contract, `Get-FileHash`,
+  install to `%LOCALAPPDATA%\Programs\dforge`, user-PATH update with
+  `DFORGE_SKIP_PATH_UPDATE=1` hint-only test mode. Contract tests with local
+  fixtures (no network, mock curl / Invoke-WebRequest shadow):
+  `tests/installer-contract.sh` (12 cases incl. asset-name matrix, corrupted
+  archive leaves install untouched, missing checksums, unsupported OS/arch,
+  static greps tying `checksums.txt` to `.goreleaser.yaml`),
+  `tests/installer-contract.ps1` (engine-compatible patterns). CI gains a
+  `windows-installer` job (PS 5.1 + pwsh). Documented deviation: checksum asset
+  is `checksums.txt` (the original task text carried dflow's default-derived
+  name by mistake; `.goreleaser.yaml`, ODD doc and CHANGELOG all say
+  `checksums.txt`). Verified: POSIX contract green, YAML OK, awk byte-identity
+  intact, `make check` green. CI also runs the POSIX contract test (step added
+  to the ubuntu job — gojira parity; the installer ships as a release asset
+  GoReleaser never executes, so CI is the only automated shipping check).
+  Documented deviation: checksum asset is `checksums.txt` (the original task
+  text carried dflow's default-derived name by mistake; `.goreleaser.yaml`, ODD
+  doc and CHANGELOG all say `checksums.txt`). Budget exception recorded: the
+  owner approved exceeding the 600-line commit budget for this slice
+  (798 lines tests-inclusive, 437 production-only; reference calibration 743)
+  — single freeze, single commit.
+- [x] **Self-update** — `internal/release/download.go` (stdlib-only): latest
+  release via GitHub API (`tag_name`), GoReleaser-exact asset names (title-cased
+  OS, amd64→x86_64, tar.gz/zip), archive + `checksums.txt` download, SHA-256
+  hard-fail on mismatch/missing/malformed entry, in-memory extraction of the
+  single binary. `cmd/update.go`: `dforge update` — provenance gate FIRST
+  (refuses `dev`/`snapshot-*`/empty with a clear reason, reusing
+  `internal/release.HasReleaseProvenance`), already-up-to-date exit 0, atomic
+  replacement (same-directory temp, original mode preserved, `os.Rename`),
+  old → new summary, `DFORGE_UPDATE_API_URL` override (mirrors dflow's).
+  Dispatcher wired in `cmd/version.go` by the parent (2-line case + usage line
+  + refreshed package comment). Tests: table-driven, httptest-only, no network
+  (8 test groups download-side; gate/refusal/happy-path/replace flows
+  update-side). Verified: `make check` green; live smoke — dev binary refuses
+  with the provenance reason and exit 1; help lists `update`. Known limitation
+  (advisory): a single `os.Rename` over a running binary fails on Windows —
+  dflow uses a rename-aside dance; flagged as follow-up if Windows update is
+  required. Budget at park: production 403 ✓; tests-inclusive 1121 > 600 —
+  owner exception pending at commit time.
+- [x] **Proxy warm-up** — `make warm-module-proxy`: curls
+  `proxy.golang.org/github.com/yepizrene-devoost/dforge/@v/$(VERSION).info`,
+  refuses `dev`, exits non-zero on curl failure for honest standalone retry;
+  `make release` swallows warm-up failure with a warn (release never fails on
+  warm-up). `make release` chains `release-notes` → preflights (`.env`, token,
+  dev refusal, tag-on-HEAD, notes-version match) → `goreleaser release --clean
+  --release-notes` → warm-up. Pinned `lint` target (golangci-lint 2.11.4,
+  hard-fail on mismatch). Plain `make` (not `$(MAKE)`) in the release recipe so
+  `make -n` stays a dry run — dflow's documented workaround.
+- [x] **Runbook and bookkeeping** — `RELEASING.md` (runbook adapted to this
+  repository: `release/*` from `develop` via `dflow start`, changelog curation,
+  `dflow finish` → PR into `main` with `References #N`, tag on `main` as its
+  own decision, `make release` preflights, tag policy — never moved or
+  deleted, self-update notes); `docs/branches/releasing-layer.md`; Task Notes
+  in `.agents/MEMORY.md` (release-model boundary, pinned `checksums.txt` name,
+  Windows rename-aside).
+- [x] **README refresh** — status note moved from `design phase` to
+  `pre-release` (release layer delivered, Phase 1 next); `RELEASING.md` added
+  to the documentation map; roadmap gains a `Delivered before Phase 1` entry
+  for the release layer. Prose-only.
+- [x] **Native review** — completed per slice: slices 1–5 each frozen,
+  reviewed natively, and approved before their commit; slice 5 required one
+  bounded correction (R4-windows-rename-always-fails, rename-aside for
+  Windows) validated by the provider's targeted validator. Slice 6 is passive
+  documentation and skipped native review on the owner's decision. Receipts
+  are recorded in the review store, never in this file.
+
+## Review slices
+
+Declared before the first freeze, per the owner's instruction to keep candidates
+small (review budgets: 600 functional lines per commit, 400 per pull-request
+slice):
+
+- **Slice 1** — Go foundation + version provenance (stages 1–2) plus this task
+  document and the `.gitignore` bookkeeping. Everything else stays out of the
+  tree until this slice is reviewed and committed.
+- **Slice 2** — release plumbing: `.goreleaser.yaml`, `cliff.toml`,
+  `CHANGELOG.md` seed, release-notes extractor, `tests/release-contract.sh`,
+  `release`/`warm-module-proxy`/`lint` Makefile targets (stages 3–5, 9).
+- **Slice 3** — CI release checks workflow (stage 6).
+- **Slice 4** — installers with checksum verification + contract tests (stage 7).
+- **Slice 5** — `dforge update` self-update (stage 8).
+- **Slice 6** — runbook, branch note, Task Notes, README refresh (stages 10, 12).
+  Passive documentation: may skip native review if trivial.
+
+Each slice: implement → verify → tick its stages here → freeze → native review →
+commit → next slice.
+
+## Notes
+
+- Commit convention: `type(scope): description`, English, lowercase, no period,
+  no ticket IDs, no file paths. Commit subjects stay conventional with no issue
+  reference (decision 0012); the PR body carries the issue link.
+- The module path must avoid internal-name disclosure (public repository).
+- Public tags are never moved, force-pushed, or deleted: a wrong public tag
+  means a new patch release.
+- `make release` preflights: token in `.env`, exact tag on HEAD, release notes
+  matching the tag version.
+
+## Commit identity
+
+Recorded in Engram after each work-unit commit, not in this file: writing SHAs
+here would be a tracked write after review approval, which mints a new candidate
+and forces a re-review for a bookkeeping line.

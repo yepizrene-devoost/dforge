@@ -36,6 +36,26 @@ constraints; what a branch changed lives in its branch note under `docs/branches
      docs/branches/<slug>.md; what proves global is promoted to Workflow
      Decisions or to a record in docs/decisions/, then this heading is pruned. -->
 
+### releasing-layer
+
+- **The release model is a boundary, not a preference.** Publishing happens
+  only through a human running `make release` locally; the CI workflows are
+  read-only and never publish. Integrity is checksums-only (`checksums.txt`,
+  verified by installers and `dforge update`) — no artifact signing. Public
+  tags are never moved, force-pushed or deleted: a wrong public tag means a
+  new patch release. Runbook: `RELEASING.md`.
+- **`checksums.txt` is pinned by name.** `.goreleaser.yaml` sets
+  `checksum.name_template: checksums.txt` (dflow instead inherits GoReleaser's
+  default `{{ .ProjectName }}_{{ .Version }}_checksums.txt`). The installers
+  and their contract tests assert the plain name, so changing the template
+  breaks the installers unless they are changed with it.
+- **Windows self-update uses a rename-aside dance.** A running `.exe` cannot
+  be overwritten, but it can be renamed: `dforge update` moves the running
+  binary to `<target>.old` and installs over the freed name; the `.old` file
+  is removed best-effort on the next update. The direct rename is injected
+  (`renameBinary`) so tests simulate the Windows failure without building on
+  Windows.
+
 ### governance-artifacts
 
 - `main` branch protection intentionally requires **zero approving reviews**
