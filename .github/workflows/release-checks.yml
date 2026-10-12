@@ -1,4 +1,4 @@
-# Release checks: one job, read-only, no publishing.
+# Release checks: two read-only jobs, no publishing.
 #
 # Nothing else in CI exercises the release path: a broken .goreleaser.yaml or
 # a CHANGELOG.md whose newest "## 📦" section cannot yield a release body would
@@ -6,7 +6,8 @@
 # that same release-path validation in CI without publishing anything — it
 # validates the GoReleaser configuration, runs the release contract tests and
 # asserts the changelog contract the release body depends on. It never runs
-# `goreleaser release`.
+# `goreleaser release`. The second job runs the Windows installer contract
+# under both Windows PowerShell 5.1 and pwsh.
 #
 # Triggers cover pushes and pull requests to both long-lived branches plus a
 # manual dispatch; permissions are read-only so CI can never publish.
@@ -70,6 +71,16 @@ jobs:
       - name: Run release contract tests
         run: bash tests/release-contract.sh
 
+      # The POSIX installer contract runs the real scripts/install.sh against a
+      # local fixture release (mock curl, no network): asset-name matrix,
+      # checksum verification, corrupted-archive and missing-checksums refusals.
+      # install.sh ships as a release asset that GoReleaser never executes, so
+      # this step is the only automated check that a broken installer cannot
+      # ship silently — the same protection the windows-installer job gives the
+      # PowerShell installer.
+      - name: Run installer contract tests
+        run: bash tests/installer-contract.sh
+
       # The published release body is built from the newest "## 📦" section of
       # CHANGELOG.md, so assert that this section exists, that its third field
       # is a semantic version (vMAJOR.MINOR.PATCH with the prerelease suffix
@@ -128,3 +139,22 @@ jobs:
             printf '::error file=CHANGELOG.md,line=%s::newest release section has no content below its heading: %s\n' "$heading_line" "$heading"
           fi
           exit 1
+
+  # The Windows installer ships in the same release, so its contract runs on
+  # both engines: Windows PowerShell 5.1 (powershell.exe, still the default
+  # Windows engine) and pwsh. Read-only permissions are inherited from the
+  # workflow-level block, so this job cannot publish either.
+  windows-installer:
+    name: Validate Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check Windows PowerShell 5.1 installer contract
+        shell: powershell
+        run: powershell -NoProfile -File tests/installer-contract.ps1
+
+      - name: Check PowerShell installer contract
+        shell: pwsh
+        run: pwsh -NoProfile -File tests/installer-contract.ps1

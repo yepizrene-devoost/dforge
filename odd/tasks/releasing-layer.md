@@ -73,9 +73,32 @@ Reference maps: `dflow` and `gojira` release layers (Engram topic key
   (ruby psych); 6 fixtures exercised by the writer; contract + `make check`
   green. PARKED on the tree for owner review per the owner's rule — native
   review and commit follow only after the owner confirms.
-- [ ] **Installers** — `scripts/install.sh` (POSIX) and `scripts/install.ps1`
-  (PowerShell): fetch latest release, verify SHA-256 against `checksums.txt`,
-  install without sudo; contract tests for the install scripts.
+- [x] **Installers** — `scripts/install.sh` (POSIX, 269 functional lines):
+  latest-release redirect or `DFORGE_VERSION` pin, GoReleaser-exact asset name
+  (title-cased OS, x86_64/arm64), downloads archive + `checksums.txt`, SHA-256
+  via sha256sum/shasum with hard abort before extraction, atomic staged install
+  to `DFORGE_INSTALL_DIR` or `~/.local/bin` (no sudo), PATH hint.
+  `scripts/install.ps1` (PS 5.1 + pwsh, 156): same contract, `Get-FileHash`,
+  install to `%LOCALAPPDATA%\Programs\dforge`, user-PATH update with
+  `DFORGE_SKIP_PATH_UPDATE=1` hint-only test mode. Contract tests with local
+  fixtures (no network, mock curl / Invoke-WebRequest shadow):
+  `tests/installer-contract.sh` (12 cases incl. asset-name matrix, corrupted
+  archive leaves install untouched, missing checksums, unsupported OS/arch,
+  static greps tying `checksums.txt` to `.goreleaser.yaml`),
+  `tests/installer-contract.ps1` (engine-compatible patterns). CI gains a
+  `windows-installer` job (PS 5.1 + pwsh). Documented deviation: checksum asset
+  is `checksums.txt` (the original task text carried dflow's default-derived
+  name by mistake; `.goreleaser.yaml`, ODD doc and CHANGELOG all say
+  `checksums.txt`). Verified: POSIX contract green, YAML OK, awk byte-identity
+  intact, `make check` green. CI also runs the POSIX contract test (step added
+  to the ubuntu job — gojira parity; the installer ships as a release asset
+  GoReleaser never executes, so CI is the only automated shipping check).
+  Documented deviation: checksum asset is `checksums.txt` (the original task
+  text carried dflow's default-derived name by mistake; `.goreleaser.yaml`, ODD
+  doc and CHANGELOG all say `checksums.txt`). Budget exception recorded: the
+  owner approved exceeding the 600-line commit budget for this slice
+  (798 lines tests-inclusive, 437 production-only; reference calibration 743)
+  — single freeze, single commit.
 - [ ] **Self-update** — `dforge update`: provenance gate (refuses `dev` and
   `snapshot-*`), download latest release for the current platform, verify
   checksum, replace binary atomically; tests for provenance and checksum logic.
