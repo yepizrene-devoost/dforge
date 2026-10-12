@@ -20,6 +20,10 @@ tag is created — its heading must name the exact version being tagged.
   file, preflighted `.env` token and tag, cross-platform archives
   (Linux/macOS/Windows, amd64/arm64) with a `checksums.txt` manifest, and a
   post-publish module-proxy warm-up.
+- **CI release checks** — a read-only workflow validates the release path on
+every push and pull request: the GoReleaser configuration (pinned version,
+deprecation-free), the changelog contract above, and both installer contract
+suites — CI validates, it never publishes.
 - **Installers** — POSIX and Windows installers fetch the release archive and
   verify its SHA-256 against `checksums.txt` before installing, without sudo.
 - **Self-update** — `dforge update` upgrades an installed binary in place with
