@@ -186,7 +186,9 @@ try {
     New-FixtureArchive -Name $assetName -Content 'latest binary'
     Remove-Item Env:DFORGE_VERSION -ErrorAction SilentlyContinue
     Reset-Requests
-    $latestOutput = (& $installer 6>&1 | Out-String)
+    # Stream 1 only: plain pipeline capture works identically in PS 5.1 and pwsh
+    # (information-stream redirection of a child script is unreliable in 5.1).
+    $latestOutput = (& $installer | Out-String)
     Assert-InstalledBinary -Expected 'latest binary' -Reason 'Latest-release install produced the wrong payload.'
     Assert-Uris -Expected @(
         "$repoUrl/releases/latest",
