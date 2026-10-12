@@ -186,7 +186,7 @@ try {
     New-FixtureArchive -Name $assetName -Content 'latest binary'
     Remove-Item Env:DFORGE_VERSION -ErrorAction SilentlyContinue
     Reset-Requests
-    $latestOutput = (& $installer *>&1 | Out-String)
+    $latestOutput = (& $installer 6>&1 | Out-String)
     Assert-InstalledBinary -Expected 'latest binary' -Reason 'Latest-release install produced the wrong payload.'
     Assert-Uris -Expected @(
         "$repoUrl/releases/latest",
