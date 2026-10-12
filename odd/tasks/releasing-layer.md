@@ -35,16 +35,32 @@ Reference maps: `dflow` and `gojira` release layers (Engram topic key
   Accepted deviations: `snapshot-` requires the dash (dflow matches broader
   `snapshot`); bare `snapshot` would classify as release — our GoReleaser
   snapshot template is `snapshot-<short>`, so this is safe.
-- [ ] **GoReleaser config** — `.goreleaser.yaml`: single build, CGO off,
-  linux/darwin/windows × amd64/arm64, archives bundle LICENSE/README/CHANGELOG,
-  `checksums.txt`, `release.mode: replace`, no changelog block, installers as
-  `extra_files`, snapshot template; deprecation-free keys.
-- [ ] **Changelog** — `cliff.toml` (conventional commits, `filter_unconventional`,
-  `docs(odd)` skipped, `tag_pattern = "v[0-9]*"`), `make changelog` draft target,
-  seeded `CHANGELOG.md` with an unreleased heading convention.
-- [ ] **Release-notes extractor** — `make release-notes`: awk extracts the newest
-  `## 📦 vX.Y.Z` section, validates exact-version match against the tag and
-  non-empty body, atomic temp-file move; contract test for the extraction.
+- [x] **GoReleaser config** — `.goreleaser.yaml` (format v2, deprecation-free):
+  single CGO-off build linux/darwin/windows × amd64/arm64 with
+  `IsSnapshot`/`Tag` ldflags, tar.gz archives (zip on windows), dflow-style
+  `title .Os` name template (`dforge_Linux_x86_64.tar.gz`), LICENSE/README/
+  CHANGELOG bundled, `checksums.txt`, `release.mode: replace`, no changelog
+  block (commented rationale), snapshot `snapshot-{{ .ShortCommit }}`,
+  installers as `release.extra_files` (later slice; non-matching globs ignored).
+  LICENSE exists in the root, so it is bundled. `goreleaser check` validated,
+  no deprecation warnings.
+- [x] **Changelog** — `cliff.toml` (conventional commits,
+  `filter_unconventional`, `protect_breaking_commits`, `tag_pattern
+  "v[0-9].*"`, feat/fix/perf grouped, `docs(odd)` and `docs` skipped,
+  refactor/test/chore → Internal, catch-all last, heading-free output);
+  `make changelog` draft target; `CHANGELOG.md` seed with
+  generated-and-curated header and `## 📦 v0.1.0 – First public release`
+  section so the CI changelog contract is green from day one. git-cliff smoke
+  test produced grouped draft without title/date/version.
+- [x] **Release-notes extractor** — `make release-notes`: one self-contained
+  awk block extracting the newest `## 📦` section, exact `$(VERSION)` semver
+  match (prerelease accepted), non-blank body, temp file with cleanup on
+  failure. `tests/release-contract.sh` (5 extraction cases + release preflight
+  cases with fake goreleaser/curl and a git fixture: byte-exact extraction,
+  prerelease acceptance, mismatch/malformed/empty/missing-section rejections,
+  missing `.env`/token, dev refusal, untagged and mismatched tag guards, stale
+  notes, happy path asserting exact goreleaser args, proxy URL and no token
+  leak). `make release-contract` green.
 - [ ] **CI release checks** — read-only workflow: `goreleaser check` with pinned
   version, changelog-contract assertion mirroring the Makefile awk, run on
   push/PR to `main`+`develop`.
@@ -54,9 +70,15 @@ Reference maps: `dflow` and `gojira` release layers (Engram topic key
 - [ ] **Self-update** — `dforge update`: provenance gate (refuses `dev` and
   `snapshot-*`), download latest release for the current platform, verify
   checksum, replace binary atomically; tests for provenance and checksum logic.
-- [ ] **Proxy warm-up** — `make warm-module-proxy`: curl
-  `proxy.golang.org/<module>/@v/<tag>.info` after publish, warn with retry
-  command on failure, refuses `dev`.
+- [x] **Proxy warm-up** — `make warm-module-proxy`: curls
+  `proxy.golang.org/github.com/yepizrene-devoost/dforge/@v/$(VERSION).info`,
+  refuses `dev`, exits non-zero on curl failure for honest standalone retry;
+  `make release` swallows warm-up failure with a warn (release never fails on
+  warm-up). `make release` chains `release-notes` → preflights (`.env`, token,
+  dev refusal, tag-on-HEAD, notes-version match) → `goreleaser release --clean
+  --release-notes` → warm-up. Pinned `lint` target (golangci-lint 2.11.4,
+  hard-fail on mismatch). Plain `make` (not `$(MAKE)`) in the release recipe so
+  `make -n` stays a dry run — dflow's documented workaround.
 - [ ] **Runbook and bookkeeping** — `RELEASING.md` adapted to this repository
   (`release/*` from `develop` → PR into `main` → tag on `main` → `make release`;
   tags never moved or deleted; `References #N` on release PRs),
